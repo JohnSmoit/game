@@ -24,8 +24,6 @@ CameraSettings :: struct {
     free: bool,
 }
 
-FUCK :: true
-
 main :: proc() {
     fmt.println("Starting...")
 
@@ -49,7 +47,7 @@ main :: proc() {
     glfw.MakeContextCurrent(win)
     glfw.ShowWindow(win)
     
-    gl.load_up_to(3, 3, glfw.gl_set_proc_address)
+    gl.load_up_to(4, 5, glfw.gl_set_proc_address)
     ui_ctx, err := init_ui(win)
 
     gl.Viewport(0, 0, 800, 600)
@@ -60,6 +58,8 @@ main :: proc() {
     }
 
     defer deinit_ui(&ui_ctx)
+
+
 
     for !glfw.WindowShouldClose(win) {
 
