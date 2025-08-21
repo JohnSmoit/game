@@ -2,6 +2,7 @@ package main
 
 import "core:fmt"
 import "core:math"
+import lin "core:math/linalg"
 
 import "world"
 
@@ -16,12 +17,66 @@ ROTATION_SPEED :: 1.0
 MOVE_SPEED :: 3.0
 VIEW_RADIUS :: 6.5
 
+@(rodata)
+CUBE_VERTS := [?]world.Vec3{
+    {-0.5, -0.5, 0.5 },
+    { 0.5, -0.5, 0.5 },
+    { 0.5,  0.5, 0.5 },
+    {-0.5,  0.5, 0.5 },
+
+    {-0.5, -0.5, -0.5 },
+    { 0.5, -0.5, -0.5 },
+    { 0.5,  0.5, -0.5 },
+    {-0.5,  0.5, -0.5 },
+}
+
+@(rodata)
+CUBE_TRIS := [?]u32{
+    0, 1, 2, 2, 0, 3,
+    0, 5, 2, 3, 7, 4,
+    4, 5, 6, 6, 4, 7
+}
+
 WorldSettings :: struct {
     dimensions: [2]u32,
 }
 
 CameraSettings :: struct {
     free: bool,
+}
+
+OPENGL_API_MAJOR :: 4
+OPENGL_API_MINOR :: 5
+
+move_camera :: proc(win: glfw.WindowHandle, cam: ^world.Camera) {
+    move := world.Vec3{0, 0, 0}
+    rot : f32 = 0
+
+    if glfw.GetKey(win, glfw.KEY_D) == glfw.PRESS {
+        move.x += 0.01
+    }
+    if glfw.GetKey(win, glfw.KEY_A) == glfw.PRESS {
+        move.x -= 0.01
+    }
+    if glfw.GetKey(win, glfw.KEY_W) == glfw.PRESS {
+        move.z += 0.01
+    }
+    if glfw.GetKey(win, glfw.KEY_S) == glfw.PRESS {
+        move.z -= 0.01
+    }
+    if glfw.GetKey(win, glfw.KEY_Q) == glfw.PRESS {
+        rot -= 0.01
+    }
+    if glfw.GetKey(win, glfw.KEY_E) == glfw.PRESS {
+        rot += 0.01
+    }
+
+    cam.position += move
+    cam.rotation_euler += rot
+}
+
+glfw_resize_callback :: proc "cdecl" (win: glfw.WindowHandle, width, height: i32) {
+    gl.Viewport(0, 0, width, height)
 }
 
 main :: proc() {
@@ -32,12 +87,13 @@ main :: proc() {
         return
     }
 
-    glfw.WindowHint(glfw.CONTEXT_VERSION_MAJOR, 3)
-    glfw.WindowHint(glfw.CONTEXT_VERSION_MINOR, 3)
+    glfw.WindowHint(glfw.CONTEXT_VERSION_MAJOR, OPENGL_API_MAJOR)
+    glfw.WindowHint(glfw.CONTEXT_VERSION_MINOR, OPENGL_API_MINOR)
     glfw.WindowHint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
 
     win := glfw.CreateWindow(800, 600, "World Preview", nil, nil) 
     defer glfw.DestroyWindow(win)
+    
 
     if win == nil {
         fmt.eprintfln("Window Creation Failed: \nReason: %s", glfw.GetError())
@@ -46,9 +102,39 @@ main :: proc() {
 
     glfw.MakeContextCurrent(win)
     glfw.ShowWindow(win)
+
+    glfw.SetFramebufferSizeCallback(win, glfw_resize_callback)
     
-    gl.load_up_to(4, 5, glfw.gl_set_proc_address)
+    gl.load_up_to(OPENGL_API_MAJOR, OPENGL_API_MINOR, glfw.gl_set_proc_address)
     ui_ctx, err := init_ui(win)
+
+    mesh : world.Mesh
+    {
+        mesh_builder := world.begin_build_sized_mesh(&mesh, len(CUBE_VERTS), len(CUBE_TRIS))
+        defer world.finalize_mesh_from_builder(&mesh_builder)
+
+        copy(mesh_builder.vertices, CUBE_VERTS[0:])
+        copy(mesh_builder.triangles, CUBE_TRIS[0:])
+    }
+
+
+    defer world.destroy_mesh(&mesh)
+
+    cam := world.Camera{
+        fov = lin.PI / 4.0,
+        far = 1000.0,
+        near = 0.1,
+        aspect = WIN_WIDTH / WIN_HEIGHT,
+        position = {0.0, 0.0, 0.0},
+        rotation_euler = 0,
+    }
+
+    shader, ok := world.shader_from_file("shaders/basic")
+    if ok != nil {
+        fmt.eprintln("Error occured loading shader (see logs for shader compilation issues")
+        return
+    }
+    defer world.destroy_shader(&shader)
 
     gl.Viewport(0, 0, 800, 600)
     
@@ -59,13 +145,21 @@ main :: proc() {
 
     defer deinit_ui(&ui_ctx)
 
-
+    world.shader_use(&shader)
 
     for !glfw.WindowShouldClose(win) {
 
-        gl.ClearColor(1.0, 0.0, 0.0, 1.0)
+        gl.ClearColor(0.0, 0.0, 0.0, 1.0)
         gl.Clear(gl.COLOR_BUFFER_BIT)
 
+        move_camera(win, &cam)
+        world.update_camera(&cam)
+
+        world.shader_set_uniform(&shader, "model", mesh.model)
+        world.shader_set_uniform(&shader, "view", cam.view)
+        world.shader_set_uniform(&shader, "projection", cam.projection)
+
+        world.draw_mesh(&mesh)
         update_ui(&ui_ctx)
 
         glfw.SwapBuffers(win)
@@ -75,108 +169,3 @@ main :: proc() {
     glfw.Terminate()
 }
 
-//CameraData :: struct {
-//	camera: ray.Camera3D,
-//    settings: CameraSettings,
-//}
-//
-//camera_movement :: proc(cam: ^CameraData) {
-//    rot_speed : f32 = ROTATION_SPEED * ray.GetFrameTime()
-//    move_speed : f32 = MOVE_SPEED * ray.GetFrameTime()
-//
-//    screen_offset := [2]f32{
-//        f32(ray.GetScreenWidth()) * 0.5,
-//        f32(ray.GetScreenHeight()) * 0.5,
-//    }
-//
-//    if ray.IsKeyReleased(.G) do cam.settings.free = !cam.settings.free
-//
-//	if cam.settings.free {
-//
-//        // camera rotatoin
-//        mouse_pos := ray.GetMousePosition()
-//
-//        rotation_factor := [2]f32{
-//            (mouse_pos.x - screen_offset.x) / screen_offset.x,
-//            (mouse_pos.y - screen_offset.y) / screen_offset.y,
-//        }
-//        if ray.IsMouseButtonDown(.LEFT) {
-//            ray.CameraPitch(&cam.camera, rotation_factor.y * -rot_speed, false, false, false)
-//            ray.CameraYaw(&cam.camera, rotation_factor.x * -rot_speed, false)
-//        }
-//
-//        if ray.IsKeyDown(.W) {
-//            ray.CameraMoveForward(&cam.camera, move_speed, false)
-//        } 
-//        if ray.IsKeyDown(.S) {
-//            ray.CameraMoveForward(&cam.camera, -move_speed, false)
-//        }
-//        if ray.IsKeyDown(.LEFT_SHIFT) {
-//            ray.CameraMoveUp(&cam.camera, move_speed)
-//        }
-//        if ray.IsKeyDown(.SPACE) {
-//            ray.CameraMoveUp(&cam.camera, -move_speed)
-//        }
-//	} else {
-//		// handle input keys
-//        ray.CameraYaw(&cam.camera, rot_speed, true)
-//	}
-//}
-//
-//main :: proc() {
-//    wld_settings := WorldSettings{}
-//    wld_settings.dimensions = {20, 20}
-//
-//	test_world := world.gen(wld_settings.dimensions.x, wld_settings.dimensions.y)
-//	defer world.destroy(test_world)
-//
-//	world.print(test_world)
-//
-//	ray.InitWindow(WIN_WIDTH, WIN_HEIGHT, WIN_NAME)
-//    
-//    cam := CameraData{}
-//    cam.settings.free = true
-//	cam.camera = ray.Camera3D{}
-//
-//	cam.camera.fovy = 45.0
-//	cam.camera.up = {0.0, 1.0, 0.0}
-//	cam.camera.target = {0.0, 0.0, 0.0}
-//	cam.camera.position = {0.0, VIEW_RADIUS, VIEW_RADIUS}
-//	cam.camera.projection = .PERSPECTIVE
-//
-//	rotation: f32 = 0.0
-//
-//    ray.SetTargetFPS(60)
-//
-//    ctx, err := init_ui((glfw.WindowHandle)(ray.GetWindowHandle()))
-//    if err != .None {
-//        fmt.println("Failed to initialize UI: ", err)
-//        return
-//    }
-//
-//    ui_cam := ray.Camera2D{}
-//    ui_cam.zoom = 1.0
-//
-//
-//	for !ray.WindowShouldClose() {
-//		ray.PollInputEvents()
-//
-//        camera_movement(&cam)
-//
-//		ray.BeginDrawing()
-//		ray.ClearBackground(ray.BLACK)
-//		ray.BeginMode3D(cam.camera)
-//
-//		world.render(test_world)
-//
-//		ray.EndMode3D()
-//        ray.BeginMode2D(ui_cam)
-//        
-//
-//        ray.EndMode2D()
-//        update_ui(&ctx)
-//		ray.EndDrawing()
-//	}
-//
-//	ray.CloseWindow()
-//}

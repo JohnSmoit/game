@@ -1,0 +1,26 @@
+package world
+
+import lin "core:math/linalg"
+import "core:math"
+
+Camera :: struct {
+    view: Mat4,
+    projection: Mat4,
+
+    position: Vec3,
+    rotation_euler: f32,
+    fov: f32,
+    aspect: f32,
+    near: f32,
+    far: f32,
+}
+
+
+/// Call this after all transformations
+update_camera :: proc(cam: ^Camera) {
+    cam.view = lin.matrix4_translate(cam.position)
+    cam.view = lin.mul(lin.matrix4_rotate(cam.rotation_euler, lin.VECTOR3F32_Y_AXIS), cam.view)
+
+    cam.view = lin.inverse(cam.view)
+    cam.projection = lin.matrix4_perspective(cam.fov, cam.aspect, cam.near, cam.far, false)
+}

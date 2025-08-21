@@ -17,6 +17,7 @@ Shader :: struct {
 
 ShaderCompileError :: enum {
 	None = 0,
+    InvalidStage,
 	Vertex,
 	Fragment,
 	Link,
@@ -40,7 +41,9 @@ module_from_file :: proc(
 	sh: GlHandle,
 	err: ShaderLoadError,
 ) {
-	path := strings.concatenate([]string{path, ".vert"}, allocator) or_return
+    extension : string = ".vert" if stage == gl.VERTEX_SHADER else ".frag"
+	path := strings.concatenate([]string{path, extension}, allocator) or_return
+
 	src, ok := os.read_entire_file(path, allocator)
 	if !ok {
 		err = ShaderCompileError.File
@@ -121,20 +124,20 @@ shader_from_file :: proc(path: string) -> (sh: Shader, err: ShaderLoadError) {
 	return
 }
 
-set_uniform :: proc(shader: ^Shader, name: string, val: $T) {
+shader_use :: proc(shader: ^Shader) {
+    gl.UseProgram(shader.program)
+}
+
+shader_set_uniform :: proc(shader: ^Shader, name: string, val: $T) {
     uniform_info := shader.uniforms_table[name]
-    switch ($T) {
-    case Vec3: 
-        gl.Uniform3fv(uniform_info.location, &val)
-    case Vec2:
-        gl.Uniform2fv(uniform_info.location, &val)
-    case f32:
-        gl.Uniform1f(uniform_info.location, val)
-    case u32, u64:
-        gl.Uniform1ui(val)
-    case i32, i64:
-        gl.Uniform1i(val)
-    }
+    copied := val
+    when T == matrix[4, 4]f32 do gl.UniformMatrix4fv(uniform_info.location, 1, false, raw_data(&copied))
+    when T == [4]f32 do gl.Uniform4fv(uniform_info.location, 1, raw_data(&copied))
+    when T == [3]f32 do gl.Uniform3fv(uniform_info.location, 1, raw_data(&copied))
+    when T == [2]f32 do gl.Uniform2fv(uniform_info.location, 1, raw_data(&copied))
+    when T == f32 do gl.Uniform1f(uniform_info.location, val)
+    when T == u32 || T == u64 do gl.Uniform1ui(uniform_info.location, val)
+    when T == i32 || T == i64 do gl.Uniform1i(uniform_info.location, val)
 }
 
 
