@@ -1,5 +1,6 @@
 package world
 
+import "core:fmt"
 import lin "core:math/linalg"
 import "base:runtime"
 import gl "vendor:OpenGL"
@@ -28,6 +29,9 @@ MeshBuilder :: struct {
     vertices: []Vec3,
     triangles: []u32,
 
+    next_vertex: u32,
+    next_index: u32,
+
     allocator: runtime.Allocator,
 
     mesh: ^Mesh,
@@ -42,9 +46,26 @@ begin_build_sized_mesh :: proc(mesh: ^Mesh, verts_count: uint, tris_count: uint)
         vertices = make([]Vec3, verts_count, context.allocator),
         triangles = make([]u32, tris_count, context.allocator),
 
+        next_vertex = 0,
+        next_index = 0,
+
         allocator = context.allocator,
         mesh = mesh,
     }
+}
+
+builder_append_vertex :: proc(builder: ^MeshBuilder, vert: Vec3) {
+    if builder.next_vertex > u32(len(builder.vertices)) do return
+    builder.vertices[builder.next_vertex] = vert;
+
+    builder.next_vertex += 1
+}
+
+builder_append_index :: proc(builder: ^MeshBuilder, ind: u32) {
+    if builder.next_index > u32(len(builder.triangles)) do return
+    builder.triangles[builder.next_index] = ind;
+
+    builder.next_index += 1
 }
 
 finalize_mesh_from_builder :: proc(builder: ^MeshBuilder) {
@@ -54,6 +75,7 @@ finalize_mesh_from_builder :: proc(builder: ^MeshBuilder) {
     builder.mesh.verts_buf = buffers[0]
     builder.mesh.tris_buf = buffers[1]
     builder.mesh.elem_count = len(builder.triangles)
+    fmt.printfln("number of elements in mesh: %d", builder.mesh.elem_count)
 
     gl.GenVertexArrays(1, &builder.mesh.vert_array)
 

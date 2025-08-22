@@ -13,44 +13,21 @@ WIN_WIDTH :: 800
 WIN_HEIGHT :: 600
 WIN_NAME :: "World Preview"
 
-ROTATION_SPEED :: 1.0
-MOVE_SPEED :: 3.0
-VIEW_RADIUS :: 6.5
-
-@(rodata)
-CUBE_VERTS := [?]world.Vec3{
-    {-0.5, -0.5, 0.5 },
-    { 0.5, -0.5, 0.5 },
-    { 0.5,  0.5, 0.5 },
-    {-0.5,  0.5, 0.5 },
-
-    {-0.5, -0.5, -0.5 },
-    { 0.5, -0.5, -0.5 },
-    { 0.5,  0.5, -0.5 },
-    {-0.5,  0.5, -0.5 },
-}
-
-@(rodata)
-CUBE_TRIS := [?]u32{
-    0, 1, 2, 2, 0, 3,
-    0, 5, 2, 3, 7, 4,
-    4, 5, 6, 6, 4, 7
-}
-
-WorldSettings :: struct {
-    dimensions: [2]u32,
-}
-
-CameraSettings :: struct {
-    free: bool,
-}
-
 OPENGL_API_MAJOR :: 4
 OPENGL_API_MINOR :: 5
 
+MOUSE_MULT :: 1.0
+
 move_camera :: proc(win: glfw.WindowHandle, cam: ^world.Camera) {
+    @(static) old_x, old_y : f64 = 0, 0
+    @(static) cam_rot_x, cam_rot_y : f32 = 0, 0
     move := world.Vec3{0, 0, 0}
     rot : f32 = 0
+
+    mousex, mousey : f64 = glfw.GetCursorPos(win)
+
+    mousex = (mousex / WIN_WIDTH - 0.5) * 2.0
+    mousey = (mousey / WIN_HEIGHT - 0.5) * 2.0
 
     if glfw.GetKey(win, glfw.KEY_D) == glfw.PRESS {
         move.x += 0.01
@@ -65,14 +42,24 @@ move_camera :: proc(win: glfw.WindowHandle, cam: ^world.Camera) {
         move.z -= 0.01
     }
     if glfw.GetKey(win, glfw.KEY_Q) == glfw.PRESS {
-        rot -= 0.01
+        move.y -= 0.01
     }
     if glfw.GetKey(win, glfw.KEY_E) == glfw.PRESS {
-        rot += 0.01
+        move.y += 0.01
     }
 
     cam.position += move
-    cam.rotation_euler += rot
+
+    cam_rot_x += f32(mousex - old_x) * MOUSE_MULT
+    cam_rot_y += f32(mousey - old_y) * MOUSE_MULT
+
+
+
+    cam.rotation = lin.quaternion_from_pitch_yaw_roll(cam_rot_y, cam_rot_x, 0)
+
+
+    old_x = mousex
+    old_y = mousey
 }
 
 glfw_resize_callback :: proc "cdecl" (win: glfw.WindowHandle, width, height: i32) {
@@ -108,25 +95,17 @@ main :: proc() {
     gl.load_up_to(OPENGL_API_MAJOR, OPENGL_API_MINOR, glfw.gl_set_proc_address)
     ui_ctx, err := init_ui(win)
 
-    mesh : world.Mesh
-    {
-        mesh_builder := world.begin_build_sized_mesh(&mesh, len(CUBE_VERTS), len(CUBE_TRIS))
-        defer world.finalize_mesh_from_builder(&mesh_builder)
-
-        copy(mesh_builder.vertices, CUBE_VERTS[0:])
-        copy(mesh_builder.triangles, CUBE_TRIS[0:])
-    }
-
-
+    mesh := gen_icosphere(1)
     defer world.destroy_mesh(&mesh)
+
+    fmt.printfln("Number of elements: %d", mesh.elem_count)
 
     cam := world.Camera{
         fov = lin.PI / 4.0,
         far = 1000.0,
         near = 0.1,
         aspect = WIN_WIDTH / WIN_HEIGHT,
-        position = {0.0, 0.0, 0.0},
-        rotation_euler = 0,
+        position = {0.0, 0.0, -1.0},
     }
 
     shader, ok := world.shader_from_file("shaders/basic")
@@ -137,6 +116,7 @@ main :: proc() {
     defer world.destroy_shader(&shader)
 
     gl.Viewport(0, 0, 800, 600)
+    gl.Enable(gl.DEPTH_TEST)
     
     if err != .None {
         fmt.printfln("Error Initializing UI: %s", err)
@@ -150,7 +130,7 @@ main :: proc() {
     for !glfw.WindowShouldClose(win) {
 
         gl.ClearColor(0.0, 0.0, 0.0, 1.0)
-        gl.Clear(gl.COLOR_BUFFER_BIT)
+        gl.Clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT)
 
         move_camera(win, &cam)
         world.update_camera(&cam)

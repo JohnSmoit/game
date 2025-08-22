@@ -22,6 +22,6 @@ void main() {
     mat4 transform = projection * view * model;
     gl_Position = transform * vec4(iPos, 1.0);
 
-    int col_index = min(gl_VertexID / 4, 5);
+    int col_index = gl_VertexID / 4 % 6;
     color = colors[col_index];
 }
