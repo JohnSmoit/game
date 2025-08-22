@@ -1,5 +1,6 @@
 package main
 
+import "core:mem"
 import "core:fmt"
 import "core:math"
 import lin "core:math/linalg"
@@ -66,13 +67,32 @@ glfw_resize_callback :: proc "cdecl" (win: glfw.WindowHandle, width, height: i32
     gl.Viewport(0, 0, width, height)
 }
 
+
 main :: proc() {
     fmt.println("Starting...")
+
+    // Setup tracking allocator for memory leak detection
+    when ODIN_DEBUG {
+        fmt.println("   ...in debug mode.")
+        allocator : mem.Tracking_Allocator
+        mem.tracking_allocator_init(&allocator, context.allocator)
+        context.allocator = mem.tracking_allocator(&allocator)
+
+        defer {
+            if len(allocator.allocation_map) != 0 {
+                for _, entry in allocator.allocation_map {
+                    fmt.eprintfln("-- %d bytes leaked at %v", entry.size, entry.location)
+                }
+            }
+        }
+    }
+
 
     if !glfw.Init() {
         fmt.eprintfln("GLFW Init Failed:\n\tReason: %s", glfw.GetError())
         return
     }
+    defer glfw.Terminate()
 
     glfw.WindowHint(glfw.CONTEXT_VERSION_MAJOR, OPENGL_API_MAJOR)
     glfw.WindowHint(glfw.CONTEXT_VERSION_MINOR, OPENGL_API_MINOR)
@@ -142,10 +162,9 @@ main :: proc() {
         world.draw_mesh(&mesh)
         update_ui(&ui_ctx)
 
+
         glfw.SwapBuffers(win)
         glfw.PollEvents()
     }
-
-    glfw.Terminate()
 }
 
