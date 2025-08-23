@@ -74,6 +74,7 @@ main :: proc() {
     // Setup tracking allocator for memory leak detection
     when ODIN_DEBUG {
         fmt.println("   ...in debug mode.")
+
         allocator : mem.Tracking_Allocator
         mem.tracking_allocator_init(&allocator, context.allocator)
         context.allocator = mem.tracking_allocator(&allocator)
@@ -115,7 +116,7 @@ main :: proc() {
     gl.load_up_to(OPENGL_API_MAJOR, OPENGL_API_MINOR, glfw.gl_set_proc_address)
     ui_ctx, err := init_ui(win)
 
-    mesh := gen_icosphere(1)
+    mesh := gen_icosphere(0)
     defer world.destroy_mesh(&mesh)
 
     fmt.printfln("Number of elements: %d", mesh.elem_count)

@@ -26,12 +26,8 @@ Mesh :: struct {
 }
 
 MeshBuilder :: struct {
-    vertices: []Vec3,
-    triangles: []u32,
-
-    next_vertex: u32,
-    next_index: u32,
-
+    vertices: [dynamic]Vec3,
+    triangles: [dynamic]u32,
     allocator: runtime.Allocator,
 
     mesh: ^Mesh,
@@ -43,30 +39,20 @@ begin_build_sized_mesh :: proc(mesh: ^Mesh, verts_count: uint, tris_count: uint)
     mesh.model = lin.identity_matrix(Mat4)
 
     return MeshBuilder {
-        vertices = make([]Vec3, verts_count, context.allocator),
-        triangles = make([]u32, tris_count, context.allocator),
-
-        next_vertex = 0,
-        next_index = 0,
-
+        vertices = make([dynamic]Vec3, verts_count, context.allocator),
+        triangles = make([dynamic]u32, tris_count, context.allocator),
         allocator = context.allocator,
         mesh = mesh,
     }
 }
 
-builder_append_vertex :: proc(builder: ^MeshBuilder, vert: Vec3) {
-    if builder.next_vertex > u32(len(builder.vertices)) do return
-    builder.vertices[builder.next_vertex] = vert;
-
-    builder.next_vertex += 1
+begin_build_mesh_dynamic :: proc(mesh: ^Mesh) -> MeshBuilder {
+    return MeshBuilder{
+        allocator = context.allocator,
+        mesh = mesh,
+    }
 }
 
-builder_append_index :: proc(builder: ^MeshBuilder, ind: u32) {
-    if builder.next_index > u32(len(builder.triangles)) do return
-    builder.triangles[builder.next_index] = ind;
-
-    builder.next_index += 1
-}
 
 finalize_mesh_from_builder :: proc(builder: ^MeshBuilder) {
     buffers : [2]u32
@@ -92,8 +78,8 @@ finalize_mesh_from_builder :: proc(builder: ^MeshBuilder) {
 
     gl.BindVertexArray(0)
 
-    delete(builder.vertices, builder.allocator)
-    delete(builder.triangles, builder.allocator)
+    delete_dynamic_array(builder.vertices)
+    delete_dynamic_array(builder.triangles)
 }
 
 rotate_mesh_euler :: proc(mesh: ^Mesh, rads: f32, axis: Vec3) {

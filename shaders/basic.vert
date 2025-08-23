@@ -11,6 +11,7 @@ flat out uint index;
 
 void main() {
     mat4 transform = projection * view * model;
-    gl_Position = transform * vec4(iPos, 1.0);
     index = gl_VertexID;
+
+    gl_Position = transform * vec4(iPos, 1.0);
 }
