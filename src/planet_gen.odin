@@ -92,9 +92,10 @@ subdivide_face :: proc(builder: ^world.MeshBuilder, tasks: ^SubdivisionQueue, ma
     orig_index_b := builder.triangles[task.tri_index + 1]
     orig_index_c := builder.triangles[task.tri_index + 2]
 
-    new_index_a : u32 = u32(len(builder.triangles))
-    new_index_b : u32 = u32(len(builder.triangles) + 1)
-    new_index_c : u32 = u32(len(builder.triangles) + 2)
+    new_index_a : u32 = u32(len(builder.vertices))
+    new_index_b : u32 = u32(len(builder.vertices) + 1)
+    new_index_c : u32 = u32(len(builder.vertices) + 2)
+
 
     orig_a := builder.vertices[orig_index_a]
     orig_b := builder.vertices[orig_index_b]
@@ -110,9 +111,11 @@ subdivide_face :: proc(builder: ^world.MeshBuilder, tasks: ^SubdivisionQueue, ma
 
     // Delete the initial indices (they need to be remapped
     // to take the subdivision into account)
-    ordered_remove(&builder.triangles, orig_index_a)
-    ordered_remove(&builder.triangles, orig_index_b)
-    ordered_remove(&builder.triangles, orig_index_c)
+    //FIXME: This literally doesn't work because it shifts the indices
+    // resulting in the other tasks referring to the wrong triangle indicies oops
+    ordered_remove(&builder.triangles, task.tri_index)
+    ordered_remove(&builder.triangles, task.tri_index + 1)
+    ordered_remove(&builder.triangles, task.tri_index + 2)
 
     // create new tasks if neccesary
     if task.level < max_lvl {
@@ -126,12 +129,14 @@ subdivide_face :: proc(builder: ^world.MeshBuilder, tasks: ^SubdivisionQueue, ma
     
     // finally, triangulate the new vertices into the mesh
     new_indices := [?]u32{
-        orig_index_a, new_index_a, new_index_c, 
-        new_index_a, orig_index_b,  new_index_b,
+        orig_index_a, new_index_a, new_index_c,
+        new_index_a, orig_index_c,  new_index_b,
         new_index_a, new_index_b, new_index_c,
-        new_index_c, new_index_b, orig_index_c,
+        new_index_c, new_index_b, orig_index_b,
     }
 
+    fmt.println(new_indices)
+   
     append(&builder.triangles, ..new_indices[:])
 
 }

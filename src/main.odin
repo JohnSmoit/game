@@ -116,7 +116,7 @@ main :: proc() {
     gl.load_up_to(OPENGL_API_MAJOR, OPENGL_API_MINOR, glfw.gl_set_proc_address)
     ui_ctx, err := init_ui(win)
 
-    mesh := gen_icosphere(0)
+    mesh := gen_icosphere(1)
     defer world.destroy_mesh(&mesh)
 
     fmt.printfln("Number of elements: %d", mesh.elem_count)

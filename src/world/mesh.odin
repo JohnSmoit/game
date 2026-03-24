@@ -47,6 +47,10 @@ begin_build_sized_mesh :: proc(mesh: ^Mesh, verts_count: uint, tris_count: uint)
 }
 
 begin_build_mesh_dynamic :: proc(mesh: ^Mesh) -> MeshBuilder {
+    mesh.verts_buf = 0
+    mesh.tris_buf = 0
+    mesh.model = lin.identity_matrix(Mat4)
+
     return MeshBuilder{
         allocator = context.allocator,
         mesh = mesh,
